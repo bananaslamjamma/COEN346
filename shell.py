@@ -1,6 +1,10 @@
+from datetime import datetime
+#from string import join
+
 import cmd, sys, os
 import subprocess
 import shlex
+
 
 #https://docs.python.org/3/library/cmd.html
 #https://danishpraka.sh/2018/09/27/shell-in-python.html
@@ -14,55 +18,126 @@ import shlex
 with open("user_input.txt") as file:
     lines = [line.rstrip() for line in file]
     
+#Print out all the lines read by the shell.    
 print(lines)
+#subprocess.call(['/mnt/c/Users/EVAN/COEN346//helloworld.exe'])
 
+#Global variables containing the user data.
 USERNAME = lines[0]
 HOSTNAME = lines[1]
 PATH = lines[2]
 
-#handling the arrows
+#Handling arrows.
 def containsArrows(input):
     if (input.find("->") or input.find("->>")) == -1:
         #print("aint here chief")
-        return
+        return 0
     
-    #shelex preserves quotations
-    #see echo "splitifcus maxiumus" -> output.txt
     list = shlex.split(input)
+    if (list[len(list)-2] == '->'): #Check if there is a file specified, not just ->
+        return list[len(list)-1] #return the output filename.. (last argument)
+    
+    return 0
 
-    print(list) 
-
-    print('->' == list[1])
+def cleanLine(input):
+    if (input.find("->") or input.find("->>")) == -1:
+        return input;
     
-    #redirects the output of command to a file named filename. If a file with the
-    #same name already exists it deletes it and creates a new one.
+    list = shlex.split(input)
+    if (list[len(list)-2] == '->'): #Check if there is a file specified, not just ->
+        del list[len(list)-1];
+        del list[len(list)-1];
+        return " ".join(list);
     
-    #technically w/o an extention, it still writes the output to the given filename so w/e
-    if os.path.exists(list[2]):
-        os.remove(list[2])       
-    if list[1] == '->':
-        #creates file if doesn't exist
-        file = open(list[2], 'w+')
-        file.write(list[0])      
-    
+    return input
+   
 
 class BananaShell(cmd.Cmd):
     intro = 'Welcome to Banana shell.    Type help or ? to list commands.\n'
     prompt = USERNAME + '@' + HOSTNAME + '$ '
     file = None
     
+    # ---- Configurations ------
+    
+    def preloop(self):
+        cmd.Cmd.preloop(self)  # # sets up command completion
+        self._output = "";
+        
+    def postcmd(self, stop, line):
+        self._output = "";
+        return stop
+        
+    #Validate command before excution. (Can be used to check for -> or &)
+    def precmd(self, line):
+        checkArrows = containsArrows(line);
+        if(checkArrows != 0): #Exists a filename after the ->
+            self._output = checkArrows;
+
+        return cmd.Cmd.precmd(self, line)
+    
+    def default(self, line):
+
+        self.stdout.write(line)
+        list = shlex.split(line)
+        #for sake of testing, the executable in path will just be a py file
+        
+        ext = ".exe"
+        self.stdout.write('*** Unknown syntax: %s\n'%line)
+        str = PATH  + "/" + line + ext
+        print(str)
+        #path
+        if os.path.exists(str):
+            print("matching using PATH")
+            subprocess.call(str)
+        #full path          
+        elif os.path.exists(line):
+            print("processing command line as path")
+            subprocess.call(line)
+        #if cwd  
+        elif (line[:2] == './'):
+                cwd = os.getcwd()
+                index = line.rfind('/')
+                length = len(line)
+                print("yeah boi")
+                print(line[index+1:length])
+                print(cwd + "/" + line[index+1:length])
+                print("processing command line in cwd")
+                subprocess.call(line)
+        else:
+            self.stdout.write('*** Unknown syntax: %s\n'%line)   
+            
+        
+
+        
+        
+
+    
     # ----- Commands -----------
     
     #for echo
     def do_echo(self, input):
-        if containsArrows(input):
-            return 0
+        if(self._output != ""): #If an output is specified
+            print(self._output)
+            if os.path.exists(self._output):
+                os.remove(self._output)       
+            file = open(self._output, 'w+')
+            file.write(cleanLine(input))
         else:
+            print(self._output)  
             print(input)
-
-            
-        #os.system("echo {} ").format(input)
         
+    #for datetime        
+    def do_datetime(self, input):
+        outputStr = datetime.now().strftime("%B %d, %Y, %H:%M:%S");
+        
+        if(self._output != ""): #If an output is specified
+            if os.path.exists(self._output):
+                os.remove(self._output)       
+            file = open(self._output, 'w+')
+            file.write(outputStr)
+        else:
+            print(outputStr)
+            
     def do_exit(self, input):
         subprocess.run("exit 1", shell=True, check=True)
     
